@@ -1,15 +1,19 @@
-'use strict';
-
-const port = process.env.PORT || 8888;
 const express = require('express');
-const app = express();
+const morgan = require('morgan');
 
-app.get('/hola/:unNombre', (req, res) => {
-  res.status(200).send({
-    mensaje: `Hola hola!`
-  });
+const app = express();
+const PORT = 8080;
+
+// Middlewares
+app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+
+app.get('/hola', (req, res) => {
+  res.send('prueba API REST');
 });
 
-app.listen(port, () => {
-  console.log(`API REST en http://localhost:${port}/hola/:unNombre`);
+app.listen(PORT, () => {
+  console.log(`API REST ejecutándose en http://localhost:${PORT}`);
 });
