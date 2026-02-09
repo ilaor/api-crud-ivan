@@ -6,7 +6,7 @@ const app = express();
 
 app.get('/hola/:unNombre', (req, res) => {
   res.status(200).send({
-    mensaje: `Hola ${req.params.unNombre} desde Express!`
+    mensaje: `Hola hola!`
   });
 });
 
