@@ -1,95 +1,152 @@
-const express = require('express');
-const morgan = require('morgan');
+'use strict'
 
-const app = express();
-const PORT = 8080;
+const config = require('./config')
+const express = require('express')
+const logger = require('morgan')
+const mongojs = require('mongojs')
+const cors = require('cors')
+
+const app = express()
+const port = config.PORT
+
+// =====================
+// CONEXIÓN A MONGODB
+// =====================
+const db = mongojs(config.DB)
+const ObjectId = mongojs.ObjectId
 
 // =====================
 // MIDDLEWARES
 // =====================
-app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(logger('dev'))
+app.use(express.urlencoded({ extended: false }))
+app.use(express.json())
+app.use(cors())
+
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*")
+    res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE")
+    res.header("Access-Control-Allow-Headers", "Content-Type, token")
+    next()
+})
 
 // =====================
-// DATOS EN MEMORIA
+// AUTH MIDDLEWARE
 // =====================
-let productos = [
-  { id: 1, nombre: 'producto1', precio: 25 },
-  { id: 2, nombre: 'producto2', precio: 15 }
-];
+const auth = (req, res, next) => {
+    if (!req.headers.token) {
+        return res.status(401).json({
+            result: 'KO',
+            msg: "Envía un código válido en la cabecera 'token'"
+        })
+    }
 
-// =====================
-// RUTAS CRUD
-// =====================
-
-// GET → obtener todos los productos
-app.get('/api/productos', (req, res) => {
-  res.json(productos);
-});
-
-// GET → obtener producto por id
-app.get('/api/productos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const producto = productos.find(p => p.id === id);
-
-  if (!producto) {
-    return res.status(404).json({ error: 'Producto no encontrado' });
-  }
-
-  res.json(producto);
-});
-
-// POST → crear un nuevo producto
-app.post('/api/productos', (req, res) => {
-  const { nombre, precio } = req.body;
-
-  if (!nombre || precio === undefined) {
-    return res.status(400).json({ error: 'Datos incompletos' });
-  }
-
-  const nuevoProducto = {
-    id: productos.length > 0 ? productos[productos.length - 1].id + 1 : 1,
-    nombre,
-    precio
-  };
-
-  productos.push(nuevoProducto);
-  res.status(201).json(nuevoProducto);
-});
-
-// PUT → actualizar un producto existente
-app.put('/api/productos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const { nombre, precio } = req.body;
-
-  const producto = productos.find(p => p.id === id);
-  if (!producto) {
-    return res.status(404).json({ error: 'Producto no encontrado' });
-  }
-
-  if (nombre !== undefined) producto.nombre = nombre;
-  if (precio !== undefined) producto.precio = precio;
-
-  res.json(producto);
-});
-
-// DELETE → eliminar un producto
-app.delete('/api/productos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const index = productos.findIndex(p => p.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ error: 'Producto no encontrado' });
-  }
-
-  const productoEliminado = productos.splice(index, 1);
-  res.json(productoEliminado[0]);
-});
+    if (req.headers.token === config.TOKEN) {
+        return next()
+    } else {
+        return res.status(401).json({
+            result: 'KO',
+            msg: "No autorizado"
+        })
+    }
+}
 
 // =====================
-// SERVIDOR
+// MIDDLEWARE DINÁMICO
 // =====================
-app.listen(PORT, () => {
-  console.log(`API REST ejecutándose en http://localhost:${PORT}`);
-});
+app.param("coleccion", (req, res, next, coleccion) => {
+    req.collection = db.collection(coleccion)
+    return next()
+})
+
+// =====================
+// RUTAS
+// =====================
+
+// GET /api → listar colecciones
+app.get('/api', (req, res, next) => {
+    db.getCollectionNames((err, colecciones) => {
+        if (err) return next(err)
+        res.json(colecciones)
+    })
+})
+
+// GET /api/:coleccion → listar documentos
+app.get('/api/:coleccion', (req, res, next) => {
+    req.collection.find((err, documentos) => {
+        if (err) return next(err)
+        res.json(documentos)
+    })
+})
+
+// GET por ID (con validación)
+app.get('/api/:coleccion/:id', (req, res, next) => {
+    const elementoId = req.params.id
+
+    // Validación simple: longitud 24
+    if (elementoId.length !== 24) {
+        return res.status(400).json({ error: "ID no válido" })
+    }
+
+    req.collection.findOne(
+        { _id: ObjectId(elementoId) },
+        (err, documento) => {
+            if (err) return next(err)
+            if (!documento) return res.status(404).json({ error: "No encontrado" })
+            res.json(documento)
+        }
+    )
+})
+
+// POST (PROTEGIDO)
+app.post('/api/:coleccion', auth, (req, res, next) => {
+    const documento = req.body
+
+    req.collection.save(documento, (err, guardado) => {
+        if (err) return next(err)
+        res.status(201).json(guardado)
+    })
+})
+
+// PUT (PROTEGIDO)
+app.put('/api/:coleccion/:id', auth, (req, res, next) => {
+    const elementoId = req.params.id
+
+    if (elementoId.length !== 24) {
+        return res.status(400).json({ error: "ID no válido" })
+    }
+
+    req.collection.update(
+        { _id: ObjectId(elementoId) },
+        { $set: req.body },
+        { safe: true, multi: false },
+        (err, resultado) => {
+            if (err) return next(err)
+            res.json(resultado)
+        }
+    )
+})
+
+// DELETE (PROTEGIDO)
+app.delete('/api/:coleccion/:id', auth, (req, res, next) => {
+    const elementoId = req.params.id
+
+    if (elementoId.length !== 24) {
+        return res.status(400).json({ error: "ID no válido" })
+    }
+
+    req.collection.remove(
+        { _id: ObjectId(elementoId) },
+        (err, resultado) => {
+            if (err) return next(err)
+            res.json(resultado)
+        }
+    )
+})
+
+// =====================
+// INICIAR SERVIDOR
+// =====================
+app.listen(port, () => {
+    console.log(`API REST ejecutándose en http://localhost:${port}/api`)
+})
