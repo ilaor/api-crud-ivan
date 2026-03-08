@@ -5,9 +5,14 @@ const express = require('express')
 const logger = require('morgan')
 const mongojs = require('mongojs')
 const cors = require('cors')
+const helmet = require('helmet');
 
 const app = express()
 const port = config.PORT
+app.use(helmet());
+
+const fs = require('fs');
+const https = require('https');
 
 // =====================
 // CONEXIÓN A MONGODB
@@ -147,6 +152,14 @@ app.delete('/api/:coleccion/:id', auth, (req, res, next) => {
 // =====================
 // INICIAR SERVIDOR
 // =====================
-app.listen(port, () => {
-    console.log(`API REST ejecutándose en http://localhost:${port}/api`)
-})
+
+https.createServer({
+  cert: fs.readFileSync('./cert/cert.pem'),
+  key: fs.readFileSync('./cert/key.pem')
+}, app).listen(port, () => {
+    console.log(`API REST ejecutándose en https://localhost:${port}/api`)
+});
+
+
+//app.listen(port, () => {
+//})
