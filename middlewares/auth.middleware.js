@@ -1,0 +1,41 @@
+'use strict'
+
+const TokenHelper = require('../helpers/token.helper');
+
+function auth(req, res, next) {
+
+    if (!req.headers.authorization) {
+        return res.status(401).json({
+            result: 'KO',
+            msg: 'Cabecera Authorization Bearer no encontrada'
+        });
+    }
+
+    const token = req.headers.authorization.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({
+            result: 'KO',
+            msg: 'Token no encontrado'
+        });
+    }
+
+    TokenHelper.decodificaToken(token)
+        .then(userId => {
+            req.user = {
+                id: userId,
+                token: token
+            };
+            next();
+        })
+        .catch(err => {
+            res.status(err.status).json({
+                result: 'KO',
+                msg: err.msg
+            });
+        });
+}
+
+module.exports = {
+    auth
+};

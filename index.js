@@ -5,14 +5,21 @@ const express = require('express')
 const logger = require('morgan')
 const mongojs = require('mongojs')
 const cors = require('cors')
-const helmet = require('helmet');
+const helmet = require('helmet')
+
+const fs = require('fs')
+const https = require('https')
+
+const AuthMiddleware = require('./middlewares/auth.middleware')
 
 const app = express()
 const port = config.PORT
-app.use(helmet());
 
-const fs = require('fs');
-const https = require('https');
+// =====================
+// SEGURIDAD
+// =====================
+app.use(helmet())
+app.use(cors())
 
 // =====================
 // CONEXIÓN A MONGODB
@@ -26,35 +33,13 @@ const ObjectId = mongojs.ObjectId
 app.use(logger('dev'))
 app.use(express.urlencoded({ extended: false }))
 app.use(express.json())
-app.use(cors())
 
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*")
     res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE")
-    res.header("Access-Control-Allow-Headers", "Content-Type, token")
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization")
     next()
 })
-
-// =====================
-// AUTH MIDDLEWARE
-// =====================
-const auth = (req, res, next) => {
-    if (!req.headers.token) {
-        return res.status(401).json({
-            result: 'KO',
-            msg: "Envía un código válido en la cabecera 'token'"
-        })
-    }
-
-    if (req.headers.token === config.TOKEN) {
-        return next()
-    } else {
-        return res.status(401).json({
-            result: 'KO',
-            msg: "No autorizado"
-        })
-    }
-}
 
 // =====================
 // MIDDLEWARE DINÁMICO
@@ -65,11 +50,11 @@ app.param("coleccion", (req, res, next, coleccion) => {
 })
 
 // =====================
-// RUTAS
+// RUTAS (TODAS PROTEGIDAS)
 // =====================
 
 // GET /api → listar colecciones
-app.get('/api', (req, res, next) => {
+app.get('/api', AuthMiddleware.auth, (req, res, next) => {
     db.getCollectionNames((err, colecciones) => {
         if (err) return next(err)
         res.json(colecciones)
@@ -77,18 +62,17 @@ app.get('/api', (req, res, next) => {
 })
 
 // GET /api/:coleccion → listar documentos
-app.get('/api/:coleccion', (req, res, next) => {
+app.get('/api/:coleccion', AuthMiddleware.auth, (req, res, next) => {
     req.collection.find((err, documentos) => {
         if (err) return next(err)
         res.json(documentos)
     })
 })
 
-// GET por ID (con validación)
-app.get('/api/:coleccion/:id', (req, res, next) => {
+// GET por ID
+app.get('/api/:coleccion/:id', AuthMiddleware.auth, (req, res, next) => {
     const elementoId = req.params.id
 
-    // Validación simple: longitud 24
     if (elementoId.length !== 24) {
         return res.status(400).json({ error: "ID no válido" })
     }
@@ -103,8 +87,8 @@ app.get('/api/:coleccion/:id', (req, res, next) => {
     )
 })
 
-// POST (PROTEGIDO)
-app.post('/api/:coleccion', auth, (req, res, next) => {
+// POST
+app.post('/api/:coleccion', AuthMiddleware.auth, (req, res, next) => {
     const documento = req.body
 
     req.collection.save(documento, (err, guardado) => {
@@ -113,8 +97,8 @@ app.post('/api/:coleccion', auth, (req, res, next) => {
     })
 })
 
-// PUT (PROTEGIDO)
-app.put('/api/:coleccion/:id', auth, (req, res, next) => {
+// PUT
+app.put('/api/:coleccion/:id', AuthMiddleware.auth, (req, res, next) => {
     const elementoId = req.params.id
 
     if (elementoId.length !== 24) {
@@ -132,8 +116,8 @@ app.put('/api/:coleccion/:id', auth, (req, res, next) => {
     )
 })
 
-// DELETE (PROTEGIDO)
-app.delete('/api/:coleccion/:id', auth, (req, res, next) => {
+// DELETE
+app.delete('/api/:coleccion/:id', AuthMiddleware.auth, (req, res, next) => {
     const elementoId = req.params.id
 
     if (elementoId.length !== 24) {
@@ -150,16 +134,12 @@ app.delete('/api/:coleccion/:id', auth, (req, res, next) => {
 })
 
 // =====================
-// INICIAR SERVIDOR
+// SERVIDOR HTTPS
 // =====================
 
 https.createServer({
-  cert: fs.readFileSync('./cert/cert.pem'),
-  key: fs.readFileSync('./cert/key.pem')
+    cert: fs.readFileSync('./cert/cert.pem'),
+    key: fs.readFileSync('./cert/key.pem')
 }, app).listen(port, () => {
-    console.log(`API REST ejecutándose en https://localhost:${port}/api`)
-});
-
-
-//app.listen(port, () => {
-//})
+    console.log(`API CRUD segura en https://localhost:${port}/api`)
+})
