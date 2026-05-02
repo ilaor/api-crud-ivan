@@ -34,12 +34,6 @@ app.use(logger('dev'))
 app.use(express.urlencoded({ extended: false }))
 app.use(express.json())
 
-app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*")
-    res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE")
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-    next()
-})
 
 // =====================
 // MIDDLEWARE DINÁMICO
@@ -62,7 +56,7 @@ app.get('/api', AuthMiddleware.auth, (req, res, next) => {
 })
 
 // GET /api/:coleccion → listar documentos
-app.get('/api/:coleccion', AuthMiddleware.auth, (req, res, next) => {
+app.get('/api/:coleccion', AuthMiddleware.auth,(req, res, next) => {
     req.collection.find((err, documentos) => {
         if (err) return next(err)
         res.json(documentos)
@@ -138,8 +132,11 @@ app.delete('/api/:coleccion/:id', AuthMiddleware.auth, (req, res, next) => {
 // =====================
 
 https.createServer({
-    cert: fs.readFileSync('./cert/cert.pem'),
+   cert: fs.readFileSync('./cert/cert.pem'),
     key: fs.readFileSync('./cert/key.pem')
 }, app).listen(port, () => {
-    console.log(`API CRUD segura en https://localhost:${port}/api`)
+   console.log(`API CRUD segura en https://localhost:${port}/api`)
 })
+// app.listen(port, () => {
+//   console.log(`API REST en http://localhost:${port}`)
+// });

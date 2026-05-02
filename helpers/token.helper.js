@@ -33,13 +33,16 @@ function creaToken(user) {
 }
 
 function decodificaToken(token) {
+  console.log({ token: token });
+  console.log({ SECRET: SECRET });
   return new Promise((resolve, reject) => {
     try {
-      const payload = jwt.decode(token, SECRET, false); // false: verifica firma y caducidad
-      resolve(payload.sub); // Si todo ha ido bien, devolvemos el id del usuario
+      const payload = jwt.decode(token, SECRET, false); 
+      resolve(payload.sub); 
     } catch (err) {
       reject({
         status: 401,
+        //msg: "hola" //mensajes puestos en clase para depurar el error 
         msg: err.message
       });
     }

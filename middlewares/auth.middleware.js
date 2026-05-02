@@ -3,7 +3,6 @@
 const TokenHelper = require('../helpers/token.helper');
 
 function auth(req, res, next) {
-
     if (!req.headers.authorization) {
         return res.status(401).json({
             result: 'KO',
@@ -29,13 +28,11 @@ function auth(req, res, next) {
             next();
         })
         .catch(err => {
-            res.status(err.status).json({
+            res.status(err.status || 401).json({
                 result: 'KO',
-                msg: err.msg
+                msg: err.msg || 'Token inválido'
             });
         });
 }
 
-module.exports = {
-    auth
-};
+module.exports = { auth };
